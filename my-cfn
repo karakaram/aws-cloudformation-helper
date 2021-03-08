@@ -1,0 +1,284 @@
+#!/usr/bin/env bash
+#/ Usage: my-cfn <parameters> [options]
+#/
+#/ A Bash script to help run AWS CloudFormation CLI.
+#/
+#/ PARAMETERS
+#/   create-stack       Create a stack
+#/   update-stack       Update a stack
+#/   delete-stack       Delete a stack
+#/   create-change-set  Create a change set
+#/   execute-change-set Execute a change set
+#/
+#/ OPTIONS
+#/   -h, --help                      Show this message
+#/   -t, --template value            A template file
+#/   -p, --parameter value           A parameter file
+#/   -s, --stack-name value          A stack name
+#/       --region                    An AWS region
+#/       --profile                   A named profile for AWS CLI
+#/   -f, --force                     Delete a stack before creation
+#/       --disable-rollback          Set to true to disable rollback of the stack if stack creation failed
+#/       --termination-protection    Enable the termination-protection
+#/
+#/ EXAMPLES
+#/     my-cfn create-stack -t ec2.yaml -p ec2.json
+#/     my-cfn update-stack -t ec2.yaml -p ec2.json
+#/     my-cfn delete-stack -t ec2.yaml
+#/     my-cfn create-change-set -t ec2.yaml -p ec2.json
+#/     my-cfn execute-change-set -t ec2.yaml
+#/
+set -e
+
+PID=
+START_TIME=`date -u +%FT%T`
+LOGLINES=
+FORCE=0
+TEMPLATE=
+PARAMETER=
+EXPECTED_PARAMETER_FILE=
+PARAMETER_OPTION=
+STACK_NAME=
+DISABLE_ROLLBACK=
+TERMINATION_PROTECTION=
+
+function usage {
+  grep '^#/' <"$0" | cut -c 4-
+}
+
+if [ -z "$*" ]; then
+  usage
+  exit 2
+fi
+
+for OPT in "$@"
+do
+  case "$OPT" in
+    '-h'|'--help')
+      usage
+      exit 1
+      ;;
+    '-t'|'--template')
+      if [[ -z "$2" ]] || [[ "$2" =~ ^-+ ]]; then
+        echo "Invalid option: $1 requires an argument" 1>&2
+        echo ""
+        usage
+        exit 1
+      fi
+      TEMPLATE="$2"
+      shift 2
+      ;;
+    '-p'|'--parameter')
+      if [[ -z "$2" ]] || [[ "$2" =~ ^-+ ]]; then
+        echo "Invalid option: $1 requires an argument" 1>&2
+        echo ""
+        usage
+        exit 1
+      fi
+      PARAMETER="$2"
+      shift 2
+      ;;
+    '-s'|'--stack-name')
+      if [[ -z "$2" ]] || [[ "$2" =~ ^-+ ]]; then
+        echo "Invalid option: $1 requires an argument" 1>&2
+        echo ""
+        usage
+        exit 1
+      fi
+      STACK_NAME="$2"
+      shift 2
+      ;;
+    '--region')
+      if [[ -z "$2" ]] || [[ "$2" =~ ^-+ ]]; then
+        echo "Invalid option: $1 requires an argument" 1>&2
+        echo ""
+        usage
+        exit 1
+      fi
+      export AWS_DEFAULT_REGION="$2"
+      shift 2
+      ;;
+    '--profile')
+      if [[ -z "$2" ]] || [[ "$2" =~ ^-+ ]]; then
+        echo "Invalid option: $1 requires an argument" 1>&2
+        echo ""
+        usage
+        exit 1
+      fi
+      export AWS_PROFILE="$2"
+      shift 2
+      ;;
+    '-f'|'--force')
+      FORCE=1
+      shift 1
+      ;;
+    '--disable-rollback')
+      DISABLE_ROLLBACK="--disable-rollback"
+      shift 1
+      ;;
+    '--termination-protection')
+      TERMINATION_PROTECTION="--enable-termination-protection"
+      shift 1
+      ;;
+    '--'|'-' )
+      shift 1
+      param+=( "$@" )
+      break
+      ;;
+    -*)
+      echo "Illegal option -- '$(echo $1 | sed 's/^-*//')'" 1>&2
+      echo "Try '${progname} --help' for more information." 1>&2
+      exit 1
+      ;;
+    *)
+      if [[ ! -z "$1" ]] && [[ ! "$1" =~ ^-+ ]]; then
+        param+=( "$1" )
+        shift 1
+      fi
+      ;;
+  esac
+done
+
+if [ "${#param[@]}" -eq 0 ] ; then
+  usage
+  exit 1
+fi
+
+if !(type "aws" > /dev/null 2>&1); then
+    echo "This script requires AWS CLI."
+    exit 1
+fi
+
+if !(type "jq" > /dev/null 2>&1); then
+    echo "This script requires jq."
+    exit 1
+fi
+
+if [[ ! "${param[0]}" =~ ^(create-stack|update-stack|delete-stack|create-change-set|execute-change-set)$ ]]; then
+  echo "Invalid Parameter: Valid parameters are create-stack, update-stack, delete-stack, create-change-set and execute-change-set."
+  echo ""
+  usage
+  exit 1
+fi
+
+if [ "$TEMPLATE" = "" ]; then
+  echo "Invalid Option: -t option must be specified"
+  echo ""
+  usage
+  exit 1
+fi
+
+if [ "$STACK_NAME" = "" ]; then
+  STACK_NAME=`basename $TEMPLATE .yaml`
+fi
+
+if [ "$PARAMETER" = "" ]; then
+  EXPECTED_PARAMETER_FILE=`dirname $TEMPLATE`/`basename $TEMPLATE .yaml`.json
+  if [ -e "$EXPECTED_PARAMETER_FILE" ]; then
+    PARAMETER_OPTION="--parameters file://"`dirname $TEMPLATE`/`basename $TEMPLATE .yaml`.json
+  fi
+else
+  PARAMETER_OPTION="--parameters file://${PARAMETER}"
+fi
+
+case "${param[0]}" in
+  'create-stack')
+    if [ "$FORCE" = "1" ]; then
+      aws cloudformation delete-stack --stack-name $STACK_NAME
+      echo "Deleting $STACK_NAME ..."
+      aws cloudformation wait stack-delete-complete --stack-name $STACK_NAME
+    fi
+
+    aws cloudformation create-stack \
+      $TERMINATION_PROTECTION \
+      $DISABLE_ROLLBACK \
+      --stack-name $STACK_NAME \
+      --template-body file://${TEMPLATE} \
+      $PARAMETER_OPTION \
+      --capabilities CAPABILITY_NAMED_IAM
+
+    aws cloudformation wait stack-create-complete --stack-name $STACK_NAME &
+    PID=$!
+  ;;
+  'update-stack')
+    aws cloudformation update-stack \
+      --stack-name $STACK_NAME \
+      --template-body file://${TEMPLATE} \
+      $PARAMETER_OPTION \
+      --capabilities CAPABILITY_NAMED_IAM
+
+    aws cloudformation wait stack-update-complete --stack-name $STACK_NAME &
+    PID=$!
+  ;;
+  'delete-stack')
+    aws cloudformation delete-stack --stack-name $STACK_NAME
+    aws cloudformation wait stack-delete-complete --stack-name $STACK_NAME &
+    PID=$!
+  ;;
+  'create-change-set')
+    if [ "$FORCE" = "1" ]; then
+      echo "Deleting change-set $STACK_NAME ..."
+      aws cloudformation delete-change-set \
+        --change-set-name $STACK_NAME \
+        --stack-name $STACK_NAME
+    fi
+
+    aws cloudformation create-change-set \
+      --change-set-name $STACK_NAME \
+      --stack-name $STACK_NAME \
+      --template-body file://${TEMPLATE} \
+      $PARAMETER_OPTION \
+      --capabilities CAPABILITY_NAMED_IAM
+
+    echo "Creating change-set $STACK_NAME ..."
+
+    aws cloudformation wait change-set-create-complete \
+      --change-set-name $STACK_NAME \
+      --stack-name $STACK_NAME || {
+        aws cloudformation describe-change-set \
+          --change-set-name $STACK_NAME \
+          --stack-name $STACK_NAME | jq -r '[.Status, .StatusReason] | @csv' | column -t -s ,
+        exit 1
+      }
+
+    echo '"Action","Logical Id","Replacement"' | column -t -s ,
+    aws cloudformation describe-change-set \
+      --change-set-name $STACK_NAME \
+      --stack-name $STACK_NAME \
+      | jq -r '.Changes[].ResourceChange | [.Action, .LogicalResourceId, .Replacement] | @csv' | column -t -s ,
+  ;;
+  'execute-change-set')
+    aws cloudformation execute-change-set \
+      --change-set-name $STACK_NAME \
+      --stack-name $STACK_NAME
+    aws cloudformation wait stack-update-complete --stack-name $STACK_NAME &
+    PID=$!
+  ;;
+esac
+
+case "${param[0]}" in
+  'create-stack' | 'update-stack' | 'delete-stack' | 'execute-change-set')
+    echo '"Timestamp","Logical Id","Status","Status reason"' | column -t -s ,
+    while ps -p $PID > /dev/null; do
+      LOGLINES=`aws cloudformation describe-stack-events \
+        --stack-name $STACK_NAME \
+        --max-items 20 2>/dev/null \
+        | jq -r ".StackEvents[] | select(.Timestamp >= \"${START_TIME}\") | [.Timestamp[:23], .LogicalResourceId, .ResourceStatus, .ResourceStatusReason] | @csv"`
+      if [ -z "$LOGLINES" ]; then
+        sleep 5
+        continue
+      fi
+      NEXT_START_TIME=`sed -nE 's/^"([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2})\.[0-9]{3}".+$/\1/p' <<< "$LOGLINES" | head -n1`
+      NEXT_START_UNIX_TIME=`date -u -j -f "%Y-%m-%dT%H:%M:%S" $NEXT_START_TIME +%s`
+      START_UNIX_TIME=$(($NEXT_START_UNIX_TIME + 1))
+      START_TIME=`date -u -r $START_UNIX_TIME +"%Y-%m-%dT%H:%M:%S"`
+      echo "$LOGLINES" | sort | column -t -s ,
+      sleep 5
+    done
+
+    wait $PID
+    if [ $? -ne 0 ]; then
+      exit 1
+    fi
+  ;;
+esac
