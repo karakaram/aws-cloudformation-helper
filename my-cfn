@@ -30,6 +30,8 @@
 #/
 set -e
 
+export AWS_PAGER=""
+
 PID=
 START_TIME=`date -u +%FT%T`
 LOGLINES=
