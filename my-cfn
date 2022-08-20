@@ -176,18 +176,18 @@ if [[ ! "${param[0]}" =~ ^(create-stack|update-stack|delete-stack|create-change-
   exit 1
 fi
 
-if [ "$TEMPLATE" = "" ]; then
+if [ -z "$TEMPLATE" ]; then
   echo "Invalid Option: -t option must be specified"
   echo ""
   usage
   exit 1
 fi
 
-if [ "$STACK_NAME" = "" ]; then
+if [ -z "$STACK_NAME" ]; then
   STACK_NAME=`basename $TEMPLATE .yaml`
 fi
 
-if [ "$PARAMETER" = "" ]; then
+if [ -z "$PARAMETER" ]; then
   EXPECTED_PARAMETER_FILE=`dirname $TEMPLATE`/`basename $TEMPLATE .yaml`.json
   if [ -e "$EXPECTED_PARAMETER_FILE" ]; then
     PARAMETER_OPTION="--parameters file://"`dirname $TEMPLATE`/`basename $TEMPLATE .yaml`.json
