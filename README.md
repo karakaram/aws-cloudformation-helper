@@ -6,8 +6,8 @@ Example of creating a stack.
 
 ```shell
 $ my-cfn create-stack \
-  --template ec2.yaml \
-  --parameter ec2.json \
+  --template examples/ec2.yaml \
+  --parameter examples/ec2.json \
   --region us-east-1
 ```
 
@@ -49,7 +49,7 @@ To create a CloudFormation stack.
 
 ```shell
 my-cfn create-stack \
-  -t ec2.yaml \
+  -t examples/ec2.yaml \
   --region us-east-1
 ```
 
@@ -57,8 +57,8 @@ To create a CloudFormation stack with a parameter.
 
 ```shell
 my-cfn create-stack \
-  -t ec2.yaml \
-  -p ec2.json \
+  -t examples/ec2.yaml \
+  -p examples/ec2.json \
   --region us-east-1
 ```
 
@@ -66,8 +66,8 @@ To update a stack.
 
 ```shell
 my-cfn update-stack \
-  -t ec2.yaml \
-  -p ec2.json \
+  -t examples/ec2.yaml \
+  -p examples/ec2.json \
   --region us-east-1
 ```
 
@@ -75,8 +75,8 @@ To create change sets.
 
 ```shell
 my-cfn create-change-set \
-  -t ec2.yaml \
-  -p ec2.json \
+  -t examples/ec2.yaml \
+  -p examples/ec2.json \
   --region us-east-1
 ```
 
@@ -84,7 +84,7 @@ To execute change sets.
 
 ```shell
 my-cfn execute-change-set \
-  -t ec2.yaml \
+  -t examples/ec2.yaml \
   --region us-east-1
 ```
 
@@ -92,15 +92,15 @@ To delete a stack.
 
 ```shell
 my-cfn delete-stack \
-  -t ec2.yaml \
+  -t examples/ec2.yaml \
   --region us-east-1
 ```
 
-To omit the parameter if both the template and the parameter have the same name. In the following example, ec2.json is automatically used as a parameter.
+To omit the parameter if both the template and the parameter have the same name. In the following example, examples/ec2.json is automatically used as a parameter.
 
 ```shell
 my-cfn create-stack \
-  -t ec2.yaml \
+  -t examples/ec2.yaml \
   --region us-east-1
 ```
 
@@ -108,7 +108,7 @@ Use `-f(--force)` option to delete a stack before creating it.
 
 ```shell
 my-cfn create-stack \
-  -t ec2.yaml \
+  -t examples/ec2.yaml \
   -f \
   --region us-east-1
 ```
@@ -117,7 +117,7 @@ Use `-s(--stack-name)` option to specify a stack name .
 
 ```shell
 my-cfn create-stack \
-  -t ec2.yaml \
+  -t examples/ec2.yaml \
   -s ec2-production \
   -p ec2-production.json \
   --region us-east-1
