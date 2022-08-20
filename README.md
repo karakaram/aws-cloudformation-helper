@@ -34,13 +34,13 @@ Output. Stack events are displayed every 5 seconds.
 
 ### Installation
 
-1. Download the script to /usr/local/bin
+1. Download the script
    ```shell
-   curl https://raw.githubusercontent.com/karakaram/aws-cloudformation-helper/main/my-cfn -o /usr/local/bin/my-cfn
+   curl -O https://raw.githubusercontent.com/karakaram/aws-cloudformation-helper/main/my-cfn
    ```
 1. Add execute permission
    ```shell
-   chmod +x /usr/local/bin/my-cfn
+   chmod +x my-cfn
    ```
 
 ## Usage
