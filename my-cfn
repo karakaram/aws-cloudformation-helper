@@ -14,6 +14,7 @@
 #/   -h, --help                      Show this message
 #/   -t, --template value            A template file
 #/   -p, --parameter value           A parameter file
+#/   -r, --role-arm value            A Role ARN
 #/   -s, --stack-name value          A stack name
 #/       --region                    An AWS region
 #/       --profile                   A named profile for AWS CLI
@@ -38,6 +39,8 @@ LOGLINES=
 FORCE=0
 TEMPLATE=
 PARAMETER=
+ROLE_ARN=
+ROLE_ARN_OPTION=
 EXPECTED_PARAMETER_FILE=
 PARAMETER_OPTION=
 STACK_NAME=
@@ -78,6 +81,16 @@ do
         exit 1
       fi
       PARAMETER="$2"
+      shift 2
+      ;;
+    '-r'|'--role-arn')
+      if [[ -z "$2" ]] || [[ "$2" =~ ^-+ ]]; then
+        echo "Invalid option: $1 requires an argument" 1>&2
+        echo ""
+        usage
+        exit 1
+      fi
+      ROLE_ARN="$2"
       shift 2
       ;;
     '-s'|'--stack-name')
@@ -183,12 +196,16 @@ else
   PARAMETER_OPTION="--parameters file://${PARAMETER}"
 fi
 
+if [ -n "$ROLE_ARN" ]; then
+  ROLE_ARN_OPTION="--role-arn $ROLE_ARN"
+fi
+
 case "${param[0]}" in
   'create-stack')
     if [ "$FORCE" = "1" ]; then
-      aws cloudformation delete-stack --stack-name $STACK_NAME
+      aws cloudformation delete-stack --stack-name $STACK_NAME $ROLE_ARN_OPTION
       echo "Deleting $STACK_NAME ..."
-      aws cloudformation wait stack-delete-complete --stack-name $STACK_NAME
+      aws cloudformation wait stack-delete-complete --stack-name $STACK_NAME $ROLE_ARN_OPTION
     fi
 
     aws cloudformation create-stack \
@@ -197,9 +214,10 @@ case "${param[0]}" in
       --stack-name $STACK_NAME \
       --template-body file://${TEMPLATE} \
       $PARAMETER_OPTION \
+      $ROLE_ARN_OPTION \
       --capabilities CAPABILITY_NAMED_IAM
 
-    aws cloudformation wait stack-create-complete --stack-name $STACK_NAME &
+    aws cloudformation wait stack-create-complete --stack-name $STACK_NAME $ROLE_ARN_OPTION &
     PID=$!
   ;;
   'update-stack')
@@ -207,14 +225,15 @@ case "${param[0]}" in
       --stack-name $STACK_NAME \
       --template-body file://${TEMPLATE} \
       $PARAMETER_OPTION \
+      $ROLE_ARN_OPTION \
       --capabilities CAPABILITY_NAMED_IAM
 
-    aws cloudformation wait stack-update-complete --stack-name $STACK_NAME &
+    aws cloudformation wait stack-update-complete --stack-name $STACK_NAME $ROLE_ARN_OPTION &
     PID=$!
   ;;
   'delete-stack')
-    aws cloudformation delete-stack --stack-name $STACK_NAME
-    aws cloudformation wait stack-delete-complete --stack-name $STACK_NAME &
+    aws cloudformation delete-stack --stack-name $STACK_NAME $ROLE_ARN_OPTION
+    aws cloudformation wait stack-delete-complete --stack-name $STACK_NAME $ROLE_ARN_OPTION &
     PID=$!
   ;;
   'create-change-set')
@@ -222,7 +241,8 @@ case "${param[0]}" in
       echo "Deleting change-set $STACK_NAME ..."
       aws cloudformation delete-change-set \
         --change-set-name $STACK_NAME \
-        --stack-name $STACK_NAME
+        --stack-name $STACK_NAME \
+        $ROLE_ARN_OPTION
     fi
 
     aws cloudformation create-change-set \
@@ -230,16 +250,19 @@ case "${param[0]}" in
       --stack-name $STACK_NAME \
       --template-body file://${TEMPLATE} \
       $PARAMETER_OPTION \
+      $ROLE_ARN_OPTION \
       --capabilities CAPABILITY_NAMED_IAM
 
     echo "Creating change-set $STACK_NAME ..."
 
     aws cloudformation wait change-set-create-complete \
       --change-set-name $STACK_NAME \
-      --stack-name $STACK_NAME || {
+      --stack-name $STACK_NAME \
+      $ROLE_ARN_OPTION || {
         aws cloudformation describe-change-set \
           --change-set-name $STACK_NAME \
-          --stack-name $STACK_NAME | jq -r '[.Status, .StatusReason] | @csv' | column -t -s ,
+          --stack-name $STACK_NAME \
+          $ROLE_ARN_OPTION | jq -r '[.Status, .StatusReason] | @csv' | column -t -s ,
         exit 1
       }
 
@@ -247,13 +270,14 @@ case "${param[0]}" in
     aws cloudformation describe-change-set \
       --change-set-name $STACK_NAME \
       --stack-name $STACK_NAME \
-      | jq -r '.Changes[].ResourceChange | [.Action, .LogicalResourceId, .Replacement] | @csv' | column -t -s ,
+      $ROLE_ARN_OPTION | jq -r '.Changes[].ResourceChange | [.Action, .LogicalResourceId, .Replacement] | @csv' | column -t -s ,
   ;;
   'execute-change-set')
     aws cloudformation execute-change-set \
       --change-set-name $STACK_NAME \
-      --stack-name $STACK_NAME
-    aws cloudformation wait stack-update-complete --stack-name $STACK_NAME &
+      --stack-name $STACK_NAME \
+      $ROLE_ARN_OPTION
+    aws cloudformation wait stack-update-complete --stack-name $STACK_NAME $ROLE_ARN_OPTION &
     PID=$!
   ;;
 esac
@@ -264,6 +288,7 @@ case "${param[0]}" in
     while ps -p $PID > /dev/null; do
       LOGLINES=`aws cloudformation describe-stack-events \
         --stack-name $STACK_NAME \
+        $ROLE_ARN_OPTION \
         --max-items 20 2>/dev/null \
         | jq -r ".StackEvents[] | select(.Timestamp >= \"${START_TIME}\") | [.Timestamp[:23], .LogicalResourceId, .ResourceStatus, .ResourceStatusReason] | @csv"`
       if [ -z "$LOGLINES" ]; then

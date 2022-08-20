@@ -113,13 +113,22 @@ my-cfn create-stack \
   --region us-east-1
 ```
 
-Use `-s(--stack-name)` option to specify a stack name .
+Use `-s(--stack-name)` option to specify a stack name.
 
 ```shell
 my-cfn create-stack \
   -t examples/ec2.yaml \
   -s ec2-production \
   -p ec2-production.json \
+  --region us-east-1
+```
+
+Use `-r(--role-arn)` option to specify a IAM Role ARN.
+
+```shell
+my-cfn create-stack \
+  -t examples/ec2.yaml \
+  -r arn:aws:iam::123456789012:role/my-role
   --region us-east-1
 ```
 
