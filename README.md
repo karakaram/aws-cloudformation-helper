@@ -43,7 +43,7 @@ Output. Stack events are displayed every 5 seconds.
    chmod +x /usr/local/bin/my-cfn
    ```
 
-## Basic Usage
+## Usage
 
 To create a CloudFormation stack.
 
@@ -96,9 +96,7 @@ my-cfn delete-stack \
   --region us-east-1
 ```
 
-## Advanced Usage
-
-You can omit the parameter if both the template and the parameter have the same name. In this case, ec2.json is automatically used as a parameter.
+To omit the parameter if both the template and the parameter have the same name. In the following example, ec2.json is automatically used as a parameter.
 
 ```shell
 my-cfn create-stack \
@@ -106,7 +104,7 @@ my-cfn create-stack \
   --region us-east-1
 ```
 
-You can use `-f(--force)` option to delete a stack before creating it.
+Use `-f(--force)` option to delete a stack before creating it.
 
 ```shell
 my-cfn create-stack \
@@ -115,7 +113,7 @@ my-cfn create-stack \
   --region us-east-1
 ```
 
-You can use `-s(--stack-name)` option to specify a stack name .
+Use `-s(--stack-name)` option to specify a stack name .
 
 ```shell
 my-cfn create-stack \
